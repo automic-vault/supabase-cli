@@ -3,6 +3,16 @@
 [![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=develop)](https://coveralls.io/github/supabase/cli?branch=develop) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
 ](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
 
+## Automic Vault Fork
+
+This fork is packaged as `isotope:supabase-cli`. It keeps the upstream CLI
+shape but changes the macOS Go credential backend so newly written Keychain
+items trust the signed Supabase executable instead of `/usr/bin/security`.
+
+The isotope also detects the legacy plaintext fallback token at
+`~/.supabase/access-token` and existing Supabase CLI Keychain items that still
+allow non-interactive reads through the `security` tool.
+
 [Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
 
 This repository contains all the functionality for Supabase CLI.
