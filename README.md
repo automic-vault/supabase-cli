@@ -18,6 +18,16 @@
   <a href="https://discord.supabase.com"><img alt="Discord" src="https://img.shields.io/discord/839993398554656828?label=discord&style=flat-square&color=3ECF8E"></a>
 </p>
 
+## Automic Vault Fork
+
+This fork is packaged as `isotope:supabase-cli`. It keeps the upstream CLI
+shape but changes the macOS Go credential backend so newly written Keychain
+items trust the signed Supabase executable instead of `/usr/bin/security`.
+
+The isotope also detects the legacy plaintext fallback token at
+`~/.supabase/access-token` and existing Supabase CLI Keychain items that still
+allow non-interactive reads through the `security` tool.
+
 ---
 
 Supabase CLI brings the Supabase Platform to your terminal. Run the full local stack, manage database migrations, deploy Edge Functions, generate types, and automate project workflows.
