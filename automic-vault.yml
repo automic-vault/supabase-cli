@@ -1,0 +1,50 @@
+name:
+  isotope:supabase-cli
+
+replaces:
+  brew:supabase
+
+build: |
+  version="$(git tag --points-at HEAD | sed -n 's/^v\([0-9][0-9.]*\)$/\1/p' | sort -V | tail -1)"
+  if [ -z "$version" ]; then
+    version="$(git describe --tags --abbrev=0 | sed 's/^v//')"
+  fi
+  pnpm install --frozen-lockfile
+  mkdir -p bin
+  cd apps/cli
+  pnpm exec bun build src/legacy/main.ts \
+    --compile \
+    --minify \
+    --define=process.env.SUPABASE_CLI_VERSION="\"${version}\"" \
+    --outfile ../../bin/supabase
+  cd ../cli-go
+  CGO_ENABLED=1 go build \
+    -tags automicvault \
+    -trimpath \
+    -ldflags="-s -w -X github.com/supabase/cli/internal/utils.Version=${version}" \
+    -o ../../bin/supabase-go \
+    .
+  cd ../..
+  codesign --force --options runtime --timestamp \
+    --sign "$CODESIGN_IDENTITY" \
+    bin/supabase \
+    bin/supabase-go
+  tar czf out.tgz bin
+
+justification:
+  title:
+    Trivially Accessible Supabase Tokens
+  detail: |
+    Supabase CLI stores access tokens in the macOS Keychain through
+    go-keyring, which creates items through `/usr/bin/security`. Those items
+    allow `/usr/bin/security` to read the token non-interactively.
+
+    Our isotope builds a signed Supabase CLI and replaces the Go credential
+    backend on macOS so new Keychain items trust the Supabase executable
+    instead of the security tool.
+
+caveats:
+  - Existing insecure Supabase CLI Keychain items are detected but not yet
+    migrated automatically.
+  - The plaintext fallback file at ~/.supabase/access-token is detected.
+  - This currently replaces the Homebrew core supabase formula.
