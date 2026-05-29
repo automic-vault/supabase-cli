@@ -101,6 +101,10 @@ var (
 			if err := utils.LoadProfile(ctx, fsys); err != nil {
 				return err
 			}
+			if isAVMigrateCommand(cmd) {
+				cmd.SetContext(ctx)
+				return nil
+			}
 			if err := utils.ChangeWorkDir(fsys); err != nil {
 				return err
 			}
@@ -183,6 +187,9 @@ func Execute() {
 	}
 	if err != nil {
 		panic(err)
+	}
+	if isAVMigrateCommand(executedCmd) {
+		return
 	}
 	// Check upgrade last because --version flag is initialised after execute
 	ctx := rootCmd.Context()
