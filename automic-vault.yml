@@ -31,6 +31,9 @@ build: |
     bin/supabase-go
   tar czf out.tgz bin
 
+migrate: |
+  /opt/isotopes/supabase-cli/bin/supabase-go av-migrate "$@"
+
 justification:
   title:
     Trivially Accessible Supabase Tokens
@@ -44,7 +47,6 @@ justification:
     instead of the security tool.
 
 caveats:
-  - Existing insecure Supabase CLI Keychain items are detected but not yet
-    migrated automatically.
-  - The plaintext fallback file at ~/.supabase/access-token is detected.
+  - Existing insecure Supabase CLI Keychain items and plaintext fallback access
+    tokens are migrated when the isotope migration runs.
   - This currently replaces the Homebrew core supabase formula.
