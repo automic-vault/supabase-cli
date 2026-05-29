@@ -2,6 +2,7 @@ package utils
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/spf13/afero"
@@ -159,6 +160,69 @@ func TestSaveTokenFallback(t *testing.T) {
 		err = fallbackSaveToken(token, fsys)
 		// Check error
 		assert.ErrorContains(t, err, "permission denied")
+	})
+}
+
+func TestMigrateFallbackAccessToken(t *testing.T) {
+	keyring.MockInit()
+	previousProfile := CurrentProfile
+	CurrentProfile = Profile{Name: "supabase"}
+	t.Cleanup(func() {
+		CurrentProfile = previousProfile
+	})
+
+	t.Run("moves fallback token into keyring", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("SUPABASE_HOME", "")
+		token := string(apitest.RandomAccessToken(t))
+		path := filepath.Join(home, ".supabase", AccessTokenKey)
+		fsys := afero.NewMemMapFs()
+		require.NoError(t, fsys.MkdirAll(filepath.Dir(path), 0755))
+		require.NoError(t, afero.WriteFile(fsys, path, []byte(token+"\n"), 0600))
+
+		migrated, err := MigrateFallbackAccessToken(fsys)
+
+		require.NoError(t, err)
+		assert.True(t, migrated)
+		saved, err := credentials.StoreProvider.Get("supabase")
+		require.NoError(t, err)
+		assert.Equal(t, token, saved)
+		exists, err := afero.Exists(fsys, path)
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
+
+	t.Run("uses supabase home when present", func(t *testing.T) {
+		home := t.TempDir()
+		supabaseHome := filepath.Join(home, "custom")
+		t.Setenv("HOME", home)
+		t.Setenv("SUPABASE_HOME", supabaseHome)
+		token := string(apitest.RandomAccessToken(t))
+		path := filepath.Join(supabaseHome, AccessTokenKey)
+		fsys := afero.NewMemMapFs()
+		require.NoError(t, fsys.MkdirAll(filepath.Dir(path), 0755))
+		require.NoError(t, afero.WriteFile(fsys, path, []byte(token), 0600))
+
+		migrated, err := MigrateFallbackAccessToken(fsys)
+
+		require.NoError(t, err)
+		assert.True(t, migrated)
+		saved, err := credentials.StoreProvider.Get("supabase")
+		require.NoError(t, err)
+		assert.Equal(t, token, saved)
+	})
+
+	t.Run("ignores missing fallback token", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("SUPABASE_HOME", "")
+		fsys := afero.NewMemMapFs()
+
+		migrated, err := MigrateFallbackAccessToken(fsys)
+
+		require.NoError(t, err)
+		assert.False(t, migrated)
 	})
 }
 
