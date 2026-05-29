@@ -19,6 +19,9 @@ This fork currently adds the following behavior on top of upstream
 - A hazard detector for insecure Supabase CLI installs, including the
   plaintext fallback token at `~/.supabase/access-token` and Keychain ACLs
   that allow `/usr/bin/security` to read Supabase secrets.
+- A hidden `supabase-go av-migrate` command used by the Automic Vault isotope
+  migration hook to rewrite insecure Keychain items and move fallback access
+  tokens into the signed Supabase credential backend.
 - Test seams that keep the credential tests deterministic without touching the
   user's real Keychain.
 
