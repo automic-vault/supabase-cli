@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/go-errors/errors"
 	"github.com/spf13/afero"
@@ -95,6 +96,72 @@ func fallbackSaveToken(accessToken string, fsys afero.Fs) error {
 		return errors.Errorf("failed to save access token file: %w", err)
 	}
 	return nil
+}
+
+func MigrateFallbackAccessToken(fsys afero.Fs) (bool, error) {
+	paths, err := fallbackAccessTokenMigrationPaths()
+	if err != nil {
+		return false, err
+	}
+
+	migrated := false
+	for _, path := range paths {
+		didMigrate, err := migrateFallbackAccessTokenPath(path, fsys)
+		if err != nil {
+			return migrated, err
+		}
+		migrated = migrated || didMigrate
+	}
+	return migrated, nil
+}
+
+func fallbackAccessTokenMigrationPaths() ([]string, error) {
+	var paths []string
+	supabaseHome := os.Getenv("SUPABASE_HOME")
+	defaultPath, err := getAccessTokenPath()
+	if err != nil {
+		if supabaseHome == "" {
+			return nil, err
+		}
+	} else {
+		paths = append(paths, defaultPath)
+	}
+	if supabaseHome != "" {
+		paths = append(paths, filepath.Join(supabaseHome, AccessTokenKey))
+	}
+
+	seen := make(map[string]struct{}, len(paths))
+	unique := paths[:0]
+	for _, path := range paths {
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		unique = append(unique, path)
+	}
+	return unique, nil
+}
+
+func migrateFallbackAccessTokenPath(path string, fsys afero.Fs) (bool, error) {
+	contents, err := afero.ReadFile(fsys, path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Errorf("failed to read access token file for migration: %w", err)
+	}
+
+	accessToken := strings.TrimSpace(string(contents))
+	if !AccessTokenPattern.MatchString(accessToken) {
+		return false, errors.Errorf("refusing to migrate invalid access token file: %s", path)
+	}
+	if err := credentials.StoreProvider.Set(CurrentProfile.Name, accessToken); err != nil {
+		return false, errors.Errorf("failed to migrate access token file to keychain: %w", err)
+	}
+	if err := fsys.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, errors.Errorf("failed to remove migrated access token file: %w", err)
+	}
+	return true, nil
 }
 
 func DeleteAccessToken(fsys afero.Fs) error {
