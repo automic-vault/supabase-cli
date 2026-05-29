@@ -9,7 +9,7 @@ Vault GUI app instead of exposing them directly to terminal tools.
 This fork currently adds the following behavior on top of upstream
 `supabase/cli`:
 
-- An `isotope:supabase-cli` package recipe that builds and signs both the
+- An `isotope:supabase` package recipe that builds and signs both the
   Bun/TypeScript `supabase` launcher and the Go `supabase-go` helper.
 - Direct macOS Keychain access from the signed `supabase-go` binary instead
   of `github.com/zalando/go-keyring` shelling out to `/usr/bin/security`, so
