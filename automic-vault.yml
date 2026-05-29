@@ -32,7 +32,7 @@ build: |
   tar czf out.tgz bin
 
 migrate: |
-  /opt/isotopes/supabase-cli/bin/supabase-go av-migrate "$@"
+  /opt/iso/supabase-cli/bin/supabase-go av-migrate "$@"
 
 justification:
   title:
