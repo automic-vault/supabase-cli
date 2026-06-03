@@ -49,12 +49,12 @@ fn contains_supabase_access_token(contents: &str) -> bool {
     token.starts_with("sbp_") && token.len() >= 44
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(coverage)))]
 fn keychain_allows_security_tool() -> Result<bool, String> {
     macos_keychain::keychain_allows_security_tool(SUPABASE_KEYCHAIN_SERVICE)
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), coverage))]
 fn keychain_allows_security_tool() -> Result<bool, String> {
     Ok(false)
 }
@@ -143,7 +143,7 @@ mod tests {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(coverage)))]
 mod macos_keychain {
     use std::ffi::c_void;
     use std::ptr;
