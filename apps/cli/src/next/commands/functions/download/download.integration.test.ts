@@ -300,16 +300,24 @@ function setup(
 
 function mockLegacyGoProxy() {
   const calls: string[][] = [];
+  const captureCalls: string[][] = [];
   return {
     layer: Layer.succeed(LegacyGoProxy, {
       exec: (args: ReadonlyArray<string>) =>
         Effect.sync(() => {
           calls.push([...args]);
         }),
-      execCapture: () => Effect.succeed(""),
+      execCapture: (args: ReadonlyArray<string>) =>
+        Effect.sync(() => {
+          captureCalls.push([...args]);
+          return "";
+        }),
     }),
     get calls() {
       return calls;
+    },
+    get captureCalls() {
+      return captureCalls;
     },
   };
 }
@@ -807,6 +815,7 @@ describe("functions download", () => {
         bodyBySlug: {
           "hello-world": multipart,
         },
+        rawArgs: ["functions", "download", "hello-world", "--use-api"],
       });
 
       yield* functionsDownload({
@@ -825,7 +834,9 @@ describe("functions download", () => {
 
     return Effect.gen(function* () {
       yield* Effect.tryPromise(() => writeProjectConfig(tempDir));
-      const { layer, proxy } = setup(tempDir);
+      const { layer, proxy } = setup(tempDir, {
+        rawArgs: ["functions", "download", "hello-world", "--legacy-bundle"],
+      });
 
       yield* functionsDownload({
         ...BASE_FLAGS,
@@ -845,7 +856,9 @@ describe("functions download", () => {
 
     return Effect.gen(function* () {
       yield* Effect.tryPromise(() => writeProjectConfig(tempDir));
-      const { layer, proxy } = setup(tempDir);
+      const { layer, proxy } = setup(tempDir, {
+        rawArgs: ["functions", "download", "hello-world", "--use-docker"],
+      });
 
       yield* functionsDownload({
         ...BASE_FLAGS,
@@ -860,12 +873,156 @@ describe("functions download", () => {
     );
   });
 
+  it.live("captures the Go proxy's output and emits a JSON envelope in machine mode", () => {
+    const tempDir = makeTempDir();
+
+    return Effect.gen(function* () {
+      yield* Effect.tryPromise(() => writeProjectConfig(tempDir));
+      const { out, layer, proxy } = setup(tempDir, {
+        format: "json",
+        rawArgs: ["functions", "download", "hello-world", "--use-docker"],
+      });
+
+      // CLI-1546: stdout is payload-only in machine mode, so the delegated
+      // Go child's raw output must be captured/discarded (not inherited),
+      // and this command must emit the `Output` envelope itself.
+      yield* functionsDownload({
+        ...BASE_FLAGS,
+        useDocker: true,
+      }).pipe(Effect.provide(layer));
+
+      expect(proxy.calls).toEqual([]);
+      expect(proxy.captureCalls).toEqual([
+        ["functions", "download", "hello-world", "--project-ref", PROJECT_REF, "--use-docker"],
+      ]);
+      expect(out.messages).toContainEqual(
+        expect.objectContaining({
+          type: "success",
+          message: "Downloaded Edge Function source.",
+          data: {
+            function_slugs: ["hello-world"],
+            project_ref: PROJECT_REF,
+          },
+        }),
+      );
+    }).pipe(
+      Effect.ensuring(Effect.tryPromise(() => rm(tempDir, { recursive: true, force: true }))),
+    );
+  });
+
+  it.live(
+    "lists remote functions before delegating when no function name is given in machine mode",
+    () => {
+      const tempDir = makeTempDir();
+
+      return Effect.gen(function* () {
+        yield* Effect.tryPromise(() => writeProjectConfig(tempDir));
+        const { out, layer, proxy } = setup(tempDir, {
+          format: "json",
+          list: [makeFunction({ slug: "hello-world" }), makeFunction({ slug: "goodbye-world" })],
+          rawArgs: ["functions", "download", "--use-docker"],
+        });
+
+        yield* functionsDownload({
+          ...BASE_FLAGS,
+          functionName: Option.none(),
+          useDocker: true,
+        }).pipe(Effect.provide(layer));
+
+        expect(proxy.calls).toEqual([]);
+        expect(proxy.captureCalls).toEqual([
+          ["functions", "download", "--project-ref", PROJECT_REF, "--use-docker"],
+        ]);
+        expect(out.messages).toContainEqual(
+          expect.objectContaining({
+            type: "success",
+            message: "Downloaded Edge Function source.",
+            data: {
+              function_slugs: ["hello-world", "goodbye-world"],
+              project_ref: PROJECT_REF,
+            },
+          }),
+        );
+      }).pipe(
+        Effect.ensuring(Effect.tryPromise(() => rm(tempDir, { recursive: true, force: true }))),
+      );
+    },
+  );
+
+  it.live(
+    "reports no functions found without delegating when the project is empty in machine mode",
+    () => {
+      const tempDir = makeTempDir();
+
+      return Effect.gen(function* () {
+        yield* Effect.tryPromise(() => writeProjectConfig(tempDir));
+        const { out, layer, proxy } = setup(tempDir, {
+          format: "json",
+          list: [],
+          rawArgs: ["functions", "download", "--use-docker"],
+        });
+
+        // An empty project has nothing to delegate — this must match the
+        // native path's "No functions found." short-circuit instead of
+        // still invoking the Go/Docker child and reporting a misleading
+        // "Downloaded Edge Function source." success with an empty list.
+        yield* functionsDownload({
+          ...BASE_FLAGS,
+          functionName: Option.none(),
+          useDocker: true,
+        }).pipe(Effect.provide(layer));
+
+        expect(proxy.calls).toEqual([]);
+        expect(proxy.captureCalls).toEqual([]);
+        expect(out.messages).toContainEqual(
+          expect.objectContaining({
+            type: "success",
+            message: "No functions found.",
+            data: { function_slugs: [], project_ref: PROJECT_REF },
+          }),
+        );
+      }).pipe(
+        Effect.ensuring(Effect.tryPromise(() => rm(tempDir, { recursive: true, force: true }))),
+      );
+    },
+  );
+
+  it.live("fails before delegating when the pre-flight function list fails in machine mode", () => {
+    const tempDir = makeTempDir();
+
+    return Effect.gen(function* () {
+      yield* Effect.tryPromise(() => writeProjectConfig(tempDir));
+      const { layer, proxy } = setup(tempDir, {
+        format: "json",
+        listStatus: 503,
+        listBody: { message: "unavailable" },
+        rawArgs: ["functions", "download", "--use-docker"],
+      });
+
+      // The pre-flight list failure must be reported before any download
+      // side effect — the delegated proxy must never be invoked (CLI-1862
+      // review: a listing failure after a successful delegated download
+      // must not mask that success).
+      const error = yield* functionsDownload({
+        ...BASE_FLAGS,
+        functionName: Option.none(),
+        useDocker: true,
+      }).pipe(Effect.provide(layer), Effect.flip);
+
+      expect(error).toBeInstanceOf(Error);
+      expect(proxy.calls).toEqual([]);
+      expect(proxy.captureCalls).toEqual([]);
+    }).pipe(
+      Effect.ensuring(Effect.tryPromise(() => rm(tempDir, { recursive: true, force: true }))),
+    );
+  });
+
   it.live("rejects mutually exclusive compatibility flags", () => {
     const tempDir = makeTempDir();
 
     return Effect.gen(function* () {
       const { api, layer, proxy } = setup(tempDir, {
-        rawArgs: ["functions", "download", "--use-api", "--legacy-bundle"],
+        rawArgs: ["functions", "download", "hello-world", "--use-api", "--legacy-bundle"],
       });
 
       const error = yield* functionsDownload({
