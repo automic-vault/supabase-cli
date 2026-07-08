@@ -323,6 +323,9 @@ Flag divergences from the Go reference:
   `reveal=true` so the Management API returns the full secret keys (`sb_secret_...`) in
   full instead of redacting them, addressing issue #4775. Default behavior (omitted flag)
   matches Go exactly.
+- `projects create` has a TS-only `--high-availability` flag (no Go equivalent). It sets
+  `high_availability` in the create request body. Default behavior (omitted flag) matches
+  Go exactly.
 
 Behavioral divergences from the Go reference:
 
