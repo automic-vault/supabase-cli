@@ -1,5 +1,6 @@
 import { Effect, FileSystem, Layer, Option, Path, Redacted } from "effect";
 
+import { resolveAutomicVaultKeyring } from "../../shared/auth/automic-vault-keyring.ts";
 import { normalizeKeyringToken } from "../../shared/auth/keyring-token.ts";
 import { CliConfig } from "../config/cli-config.service.ts";
 import { Credentials } from "./credentials.service.ts";
@@ -25,10 +26,22 @@ const makeCredentials = Effect.gen(function* () {
     Option.isSome(cliConfig.noKeyring) && cliConfig.noKeyring.value === "1"
       ? Option.none<typeof import("@napi-rs/keyring")>()
       : yield* Effect.tryPromise(() => import("@napi-rs/keyring")).pipe(Effect.option);
+  const vaultKeyring =
+    Option.isSome(cliConfig.noKeyring) && cliConfig.noKeyring.value === "1"
+      ? null
+      : resolveAutomicVaultKeyring();
 
   return Credentials.of({
     // Read current storage first, then fall back to legacy account and finally the filesystem.
     getAccessToken: Effect.gen(function* () {
+      if (vaultKeyring) {
+        for (const account of [ACCOUNT, LEGACY_ACCOUNT]) {
+          const token = vaultKeyring.get(account);
+          if (token) return Option.some(Redacted.make(normalizeKeyringToken(token)));
+        }
+        return Option.none();
+      }
+
       if (Option.isSome(keyringModule)) {
         try {
           const entry = new keyringModule.value.Entry(SERVICE, ACCOUNT);
@@ -61,6 +74,13 @@ const makeCredentials = Effect.gen(function* () {
     saveAccessToken: (token: string | Redacted.Redacted<string>) =>
       Effect.gen(function* () {
         const plainToken = typeof token === "string" ? token : Redacted.value(token);
+        if (vaultKeyring) {
+          if (!vaultKeyring.set(ACCOUNT, plainToken)) {
+            throw new Error("failed to save access token to secure storage");
+          }
+          return;
+        }
+
         if (Option.isSome(keyringModule)) {
           try {
             const entry = new keyringModule.value.Entry(SERVICE, ACCOUNT);
@@ -79,7 +99,13 @@ const makeCredentials = Effect.gen(function* () {
     deleteAccessToken: Effect.gen(function* () {
       let anyDeleted = false;
 
-      if (Option.isSome(keyringModule)) {
+      if (vaultKeyring) {
+        for (const account of [ACCOUNT, LEGACY_ACCOUNT]) {
+          if (vaultKeyring.get(account)) {
+            anyDeleted = vaultKeyring.delete(account) || anyDeleted;
+          }
+        }
+      } else if (Option.isSome(keyringModule)) {
         for (const account of [ACCOUNT, LEGACY_ACCOUNT]) {
           try {
             const entry = new keyringModule.value.Entry(SERVICE, account);
