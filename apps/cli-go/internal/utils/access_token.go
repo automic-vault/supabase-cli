@@ -49,6 +49,9 @@ func loadAccessToken(fsys afero.Fs) (string, error) {
 		fmt.Fprintln(logger, "Using access token from credentials store...")
 		return accessToken, nil
 	}
+	if credentials.RequiresSecureStorage() {
+		return "", errors.New(ErrMissingToken)
+	}
 	// Fallback to token file
 	return fallbackLoadToken(fsys)
 }
@@ -76,6 +79,9 @@ func SaveAccessToken(accessToken string, fsys afero.Fs) error {
 	// Save to current profile
 	if err := credentials.StoreProvider.Set(CurrentProfile.Name, accessToken); err != nil {
 		fmt.Fprintln(GetDebugLogger(), err)
+		if credentials.RequiresSecureStorage() {
+			return errors.Errorf("failed to save access token to secure storage: %w", err)
+		}
 	} else {
 		return nil
 	}
