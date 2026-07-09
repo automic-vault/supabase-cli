@@ -8,21 +8,22 @@ import (
 )
 
 func TestDeleteAll(t *testing.T) {
+	mockKeyringInit()
 	service := "test-cli"
 	// Nothing to delete
-	err := keyring.DeleteAll(service)
+	err := keyringDeleteAll(service)
 	assert.NoError(t, err)
 	// Setup 2 items
-	err = keyring.Set(service, "key1", "value")
+	err = keyringSet(service, "key1", "value")
 	assert.NoError(t, err)
-	err = keyring.Set(service, "key2", "value")
+	err = keyringSet(service, "key2", "value")
 	assert.NoError(t, err)
 	// Delete all items
-	err = keyring.DeleteAll(service)
+	err = keyringDeleteAll(service)
 	assert.NoError(t, err)
 	// Check items are gone
-	_, err = keyring.Get(service, "key1")
+	_, err = keyringGet(service, "key1")
 	assert.ErrorIs(t, err, keyring.ErrNotFound)
-	_, err = keyring.Get(service, "key2")
+	_, err = keyringGet(service, "key2")
 	assert.ErrorIs(t, err, keyring.ErrNotFound)
 }
