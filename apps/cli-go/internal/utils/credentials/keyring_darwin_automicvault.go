@@ -75,7 +75,6 @@ func approvalDecisionNotice(decision string) string {
 		return ""
 	}
 }
-
 func keyringGet(service, account string) (string, error) {
 	if keyringBackendOverride != nil {
 		return keyringBackendOverride.Get(service, account)
