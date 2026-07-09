@@ -13,12 +13,18 @@ import {
 import type { PlatformError } from "effect/PlatformError";
 
 import { RuntimeInfo } from "../shared/runtime/runtime-info.service.ts";
+import { resolveAutomicVaultKeyring } from "../shared/auth/automic-vault-keyring.ts";
 import { normalizeKeyringToken } from "../shared/auth/keyring-token.ts";
 import { DebugLogger, type DebugLoggerShape } from "../command-internal/debug-logger.service.ts";
 import { CommandSettings } from "../config/command-settings.service.ts";
 import { ACCESS_TOKEN_PATTERN, validateAccessToken } from "./access-token.ts";
 import { CommandCredentials } from "./command-credentials.service.ts";
-import { CredentialDeleteError, DeleteTokenError, NotLoggedInError } from "./errors.ts";
+import {
+  CredentialDeleteError,
+  DeleteTokenError,
+  InvalidAccessTokenError,
+  NotLoggedInError,
+} from "./errors.ts";
 
 const KEYRING_SERVICE = "Supabase CLI";
 const LEGACY_KEYRING_ACCOUNT = "access-token";
@@ -364,6 +370,25 @@ const readKeyringForAccount = (
     return legacyResult;
   });
 
+const readAutomicVaultKeyringForAccount = (
+  keyring: NonNullable<ReturnType<typeof resolveAutomicVaultKeyring>>,
+  profileAccount: string,
+  debugLogger: DebugLoggerShape,
+): Effect.Effect<Option.Option<string>> =>
+  Effect.gen(function* () {
+    const profileToken = keyring.get(profileAccount);
+    if (profileToken) {
+      yield* debugLogger.debug(`Using access token for profile: ${profileAccount}`);
+      return Option.some(normalizeKeyringToken(profileToken));
+    }
+    const legacyToken = keyring.get(LEGACY_KEYRING_ACCOUNT);
+    if (legacyToken) {
+      yield* debugLogger.debug("Using access token from credentials store...");
+      return Option.some(normalizeKeyringToken(legacyToken));
+    }
+    return Option.none<string>();
+  });
+
 const readFallbackFile = (
   fs: FileSystem.FileSystem,
   fallbackPath: string,
@@ -404,17 +429,20 @@ export const accessTokenForProfile = Effect.fnUntraced(function* (profileAccount
   const noKeyring = yield* Config.option(Config.string("SUPABASE_NO_KEYRING")).parse(
     configProvider,
   );
-  const keyringModule = yield* loadKeyringModule(fs, noKeyring);
-  const keyringValue = yield* readKeyringForAccount(
-    keyringModule,
-    profileAccount,
-    runtimeInfo.platform,
-    debugLogger,
-  );
+  const vaultKeyring =
+    Option.isSome(noKeyring) && noKeyring.value === "1" ? null : resolveAutomicVaultKeyring();
+  const keyringModule = vaultKeyring
+    ? Option.none<KeyringModule>()
+    : yield* loadKeyringModule(fs, noKeyring);
+  const keyringValue = yield* (vaultKeyring
+    ? readAutomicVaultKeyringForAccount(vaultKeyring, profileAccount, debugLogger)
+    : readKeyringForAccount(keyringModule, profileAccount, runtimeInfo.platform, debugLogger));
   if (Option.isSome(keyringValue)) {
     yield* validateAccessToken(keyringValue.value);
     return Option.some(Redacted.make(keyringValue.value));
   }
+
+  if (vaultKeyring) return Option.none<Redacted.Redacted<string>>();
 
   const fallbackPath = path.join(cliSettings.supabaseHome, "access-token");
   const fileValue = yield* readFallbackFile(fs, fallbackPath);
@@ -443,14 +471,14 @@ const makeCommandCredentials = Effect.gen(function* () {
   const fallbackDir = cliSettings.supabaseHome;
   const fallbackPath = path.join(fallbackDir, "access-token");
 
-  const keyringModule = yield* loadKeyringModule(fs, noKeyring);
-
-  const readKeyring = readKeyringForAccount(
-    keyringModule,
-    profileAccount,
-    runtimeInfo.platform,
-    debugLogger,
-  );
+  const vaultKeyring =
+    Option.isSome(noKeyring) && noKeyring.value === "1" ? null : resolveAutomicVaultKeyring();
+  const keyringModule = vaultKeyring
+    ? Option.none<KeyringModule>()
+    : yield* loadKeyringModule(fs, noKeyring);
+  const readKeyring = vaultKeyring
+    ? readAutomicVaultKeyringForAccount(vaultKeyring, profileAccount, debugLogger)
+    : readKeyringForAccount(keyringModule, profileAccount, runtimeInfo.platform, debugLogger);
 
   const readFile = readFallbackFile(fs, fallbackPath);
 
@@ -469,6 +497,7 @@ const makeCommandCredentials = Effect.gen(function* () {
         return Option.some(Redacted.make(keyringValue.value));
       }
 
+      if (vaultKeyring) return Option.none();
       const fileValue = yield* readFile;
       if (Option.isSome(fileValue)) {
         yield* debugLogger.debug(`Using access token from file: ${fallbackPath}`);
@@ -482,6 +511,15 @@ const makeCommandCredentials = Effect.gen(function* () {
     saveAccessToken: (token: string) =>
       Effect.gen(function* () {
         yield* validateAccessToken(token);
+        if (vaultKeyring) {
+          if (vaultKeyring.set(profileAccount, token)) return;
+          return yield* Effect.fail(
+            new InvalidAccessTokenError({
+              message: "failed to save access token to secure storage",
+            }),
+          );
+        }
+
         if (Option.isSome(keyringModule)) {
           const ok = yield* tryKeyringWrite(
             keyringModule.value,
@@ -514,12 +552,28 @@ const makeCommandCredentials = Effect.gen(function* () {
 
       // Best-effort delete of the legacy `access-token` keyring account; errors here don't
       // affect the result.
-      if (Option.isSome(keyringModule)) {
+      if (vaultKeyring) {
+        if (vaultKeyring.get(LEGACY_KEYRING_ACCOUNT)) vaultKeyring.delete(LEGACY_KEYRING_ACCOUNT);
+      } else if (Option.isSome(keyringModule)) {
         yield* tryKeyringDelete(keyringModule.value, LEGACY_KEYRING_ACCOUNT, runtimeInfo.platform);
       }
 
       // Deleting the profile keyring account decides the outcome; no keyring backend (WSL,
       // `SUPABASE_NO_KEYRING`, unsupported) maps to `NotLoggedInError`.
+      if (vaultKeyring) {
+        if (!vaultKeyring.get(profileAccount)) {
+          return yield* new NotLoggedInError({ message: NOT_LOGGED_IN_MESSAGE });
+        }
+        if (!vaultKeyring.delete(profileAccount)) {
+          return yield* Effect.fail(
+            new DeleteTokenError({
+              message: "failed to delete access token from secure storage",
+            }),
+          );
+        }
+        return;
+      }
+
       if (Option.isNone(keyringModule)) {
         return yield* new NotLoggedInError({ message: NOT_LOGGED_IN_MESSAGE });
       }
@@ -534,12 +588,20 @@ const makeCommandCredentials = Effect.gen(function* () {
     }),
 
     deleteAllProjectCredentials: Effect.gen(function* () {
+      if (vaultKeyring) {
+        vaultKeyring.deleteAll();
+        return;
+      }
       if (Option.isNone(keyringModule)) return;
       yield* deleteAllKeyringEntries(keyringModule.value, runtimeInfo.platform);
     }),
 
     deleteProjectCredential: (projectRef: string) =>
       Effect.gen(function* () {
+        if (vaultKeyring) {
+          if (!vaultKeyring.get(projectRef)) return false;
+          return vaultKeyring.delete(projectRef);
+        }
         // WSL or no keyring module: no-op success, nothing to delete.
         if (Option.isNone(keyringModule)) return false;
         return yield* deleteKeyringEntryStrict(
