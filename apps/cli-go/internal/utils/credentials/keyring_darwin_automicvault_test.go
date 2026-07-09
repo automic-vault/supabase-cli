@@ -26,7 +26,6 @@ func TestApprovalEventNotice(t *testing.T) {
 	require.Equal(t, humanApprovalRequiredNotice, approvalEventNotice(humanApprovalRequiredEvent))
 	require.Empty(t, approvalEventNotice("other-event"))
 }
-
 func TestDecodeSecretPlain(t *testing.T) {
 	secret, err := decodeSecret("sbp_test")
 
