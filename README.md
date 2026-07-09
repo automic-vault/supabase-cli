@@ -1,3 +1,26 @@
+# Automic Vault Fork Notes
+
+This repository is the Automic Vault fork of Supabase CLI.
+
+Automic Vault is a macOS-first secret and execution control system that
+keeps sensitive credentials behind explicit human approval in the Automic
+Vault GUI app instead of exposing them directly to terminal tools.
+
+This fork currently adds the following behavior on top of upstream
+`supabase/cli`:
+
+- An `isotope:supabase` package recipe that builds and signs both the
+  Bun/TypeScript `supabase` launcher and the Go `supabase-go` helper.
+- A macOS-only `automicvault` Go build tag that routes credential reads,
+  writes, and deletes through the Automic Vault XPC approval service.
+- Compatibility with Automic Vault's Supabase detector and hardener.
+- Test seams that keep the credential tests deterministic without touching the
+  user's real Keychain.
+
+The remainder of this README is the original upstream Supabase CLI README.
+
+---
+
 <p align="center">
   <a href="https://supabase.com">
     <picture>
@@ -17,8 +40,6 @@
   <a href="https://www.npmjs.com/package/supabase"><img alt="License" src="https://img.shields.io/npm/l/supabase.svg?style=flat-square&color=3ECF8E"></a>
   <a href="https://discord.supabase.com"><img alt="Discord" src="https://img.shields.io/discord/839993398554656828?label=discord&style=flat-square&color=3ECF8E"></a>
 </p>
-
----
 
 Supabase CLI brings the Supabase Platform to your terminal. Run the full local stack, manage database migrations, deploy Edge Functions, generate types, and automate project workflows.
 
