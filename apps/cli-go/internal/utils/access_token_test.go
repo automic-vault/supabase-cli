@@ -2,7 +2,6 @@ package utils
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/spf13/afero"
