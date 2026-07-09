@@ -1,5 +1,6 @@
 import { Effect, FileSystem, Layer, Option, Path, Redacted } from "effect";
 
+import { resolveAutomicVaultKeyring } from "../../shared/auth/automic-vault-keyring.ts";
 import { RuntimeInfo } from "../../shared/runtime/runtime-info.service.ts";
 import { normalizeKeyringToken } from "../../shared/auth/keyring-token.ts";
 import { LegacyDebugLogger } from "../shared/legacy-debug-logger.service.ts";
@@ -10,6 +11,7 @@ import { LegacyCredentials } from "./legacy-credentials.service.ts";
 import {
   LegacyCredentialDeleteError,
   LegacyDeleteTokenError,
+  LegacyInvalidAccessTokenError,
   LegacyNotLoggedInError,
 } from "./legacy-errors.ts";
 
@@ -329,12 +331,27 @@ const makeLegacyCredentials = Effect.gen(function* () {
   // Keychain authorization prompt in non-interactive / CI contexts.
   const noKeyring = process.env["SUPABASE_NO_KEYRING"] === "1";
   const wsl = yield* detectWsl(fs);
+  const vaultKeyring = wsl || noKeyring ? null : resolveAutomicVaultKeyring();
   const keyringModule =
     wsl || noKeyring
       ? Option.none<KeyringModule>()
       : yield* Effect.tryPromise(() => import("@napi-rs/keyring")).pipe(Effect.option);
 
   const readKeyring = Effect.gen(function* () {
+    if (vaultKeyring) {
+      const profileToken = vaultKeyring.get(profileAccount);
+      if (profileToken) {
+        yield* debugLogger.debug(`Using access token for profile: ${profileAccount}`);
+        return Option.some(normalizeKeyringToken(profileToken));
+      }
+      const legacyToken = vaultKeyring.get(LEGACY_KEYRING_ACCOUNT);
+      if (legacyToken) {
+        yield* debugLogger.debug("Using access token from credentials store...");
+        return Option.some(normalizeKeyringToken(legacyToken));
+      }
+      return Option.none<string>();
+    }
+
     if (Option.isNone(keyringModule)) return Option.none<string>();
     const profileResult = yield* tryKeyringRead(
       keyringModule.value,
@@ -381,6 +398,7 @@ const makeLegacyCredentials = Effect.gen(function* () {
       }
 
       // Filesystem fallback in the Supabase home directory.
+      if (vaultKeyring) return Option.none();
       const fileValue = yield* readFile;
       if (Option.isSome(fileValue)) {
         yield* debugLogger.debug(`Using access token from file: ${fallbackPath}`);
@@ -394,6 +412,15 @@ const makeLegacyCredentials = Effect.gen(function* () {
     saveAccessToken: (token: string) =>
       Effect.gen(function* () {
         yield* validateLegacyAccessToken(token);
+        if (vaultKeyring) {
+          if (vaultKeyring.set(profileAccount, token)) return;
+          return yield* Effect.fail(
+            new LegacyInvalidAccessTokenError({
+              message: "failed to save access token to secure storage",
+            }),
+          );
+        }
+
         if (Option.isSome(keyringModule)) {
           const ok = yield* tryKeyringWrite(
             keyringModule.value,
@@ -429,13 +456,29 @@ const makeLegacyCredentials = Effect.gen(function* () {
 
       // 2. Best-effort delete of the legacy `access-token` keyring account.
       //    Go debug-logs and ignores any error here — never affects the result.
-      if (Option.isSome(keyringModule)) {
+      if (vaultKeyring) {
+        if (vaultKeyring.get(LEGACY_KEYRING_ACCOUNT)) vaultKeyring.delete(LEGACY_KEYRING_ACCOUNT);
+      } else if (Option.isSome(keyringModule)) {
         yield* tryKeyringDelete(keyringModule.value, LEGACY_KEYRING_ACCOUNT, runtimeInfo.platform);
       }
 
       // 3. Delete the profile keyring account — this alone decides the outcome.
       //    No keyring backend (WSL / `SUPABASE_NO_KEYRING` / unsupported) maps to
       //    Go's `ErrNotSupported`/`ErrUnsupportedPlatform` → `ErrNotLoggedIn`.
+      if (vaultKeyring) {
+        if (!vaultKeyring.get(profileAccount)) {
+          return yield* Effect.fail(new LegacyNotLoggedInError({ message: NOT_LOGGED_IN_MESSAGE }));
+        }
+        if (!vaultKeyring.delete(profileAccount)) {
+          return yield* Effect.fail(
+            new LegacyDeleteTokenError({
+              message: "failed to delete access token from secure storage",
+            }),
+          );
+        }
+        return;
+      }
+
       if (Option.isNone(keyringModule)) {
         return yield* Effect.fail(new LegacyNotLoggedInError({ message: NOT_LOGGED_IN_MESSAGE }));
       }
@@ -450,12 +493,20 @@ const makeLegacyCredentials = Effect.gen(function* () {
     }),
 
     deleteAllProjectCredentials: Effect.gen(function* () {
+      if (vaultKeyring) {
+        vaultKeyring.deleteAll();
+        return;
+      }
       if (Option.isNone(keyringModule)) return;
       yield* deleteAllKeyringEntries(keyringModule.value, runtimeInfo.platform);
     }),
 
     deleteProjectCredential: (projectRef: string) =>
       Effect.gen(function* () {
+        if (vaultKeyring) {
+          if (!vaultKeyring.get(projectRef)) return false;
+          return vaultKeyring.delete(projectRef);
+        }
         // WSL / no keyring module: treated as `ErrNotSupported` — a no-op success.
         if (Option.isNone(keyringModule)) return false;
         return yield* deleteKeyringEntryStrict(
