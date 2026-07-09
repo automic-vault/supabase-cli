@@ -1,6 +1,7 @@
 import { Effect, FileSystem, Layer, Option, Path, Predicate, Redacted } from "effect";
 
 import { normalizeKeyringToken } from "./keyring-token.ts";
+import { resolveAutomicVaultKeyring } from "./automic-vault-keyring.ts";
 import { CliSettings } from "../config/cli-settings.service.ts";
 import { Credentials } from "./credentials.service.ts";
 
@@ -57,9 +58,21 @@ const makeCredentials = Effect.gen(function* () {
     Option.isSome(cliSettings.noKeyring) && cliSettings.noKeyring.value === "1"
       ? Option.none<KeyringModule>()
       : yield* Effect.tryPromise(() => import("@napi-rs/keyring")).pipe(Effect.option);
+  const vaultKeyring =
+    Option.isSome(cliSettings.noKeyring) && cliSettings.noKeyring.value === "1"
+      ? null
+      : resolveAutomicVaultKeyring();
 
   return Credentials.of({
     getAccessToken: Effect.gen(function* () {
+      if (vaultKeyring) {
+        for (const account of [ACCOUNT, LEGACY_ACCOUNT]) {
+          const token = vaultKeyring.get(account);
+          if (token) return Option.some(Redacted.make(normalizeKeyringToken(token)));
+        }
+        return Option.none();
+      }
+
       if (Option.isSome(keyringModule)) {
         const token = yield* tryKeyringRead(keyringModule.value, ACCOUNT);
         if (Option.isSome(token)) {
@@ -84,6 +97,13 @@ const makeCredentials = Effect.gen(function* () {
     saveAccessToken: (token: string | Redacted.Redacted<string>) =>
       Effect.gen(function* () {
         const plainToken = typeof token === "string" ? token : Redacted.value(token);
+        if (vaultKeyring) {
+          if (!vaultKeyring.set(ACCOUNT, plainToken)) {
+            throw new Error("failed to save access token to secure storage");
+          }
+          return;
+        }
+
         if (Option.isSome(keyringModule)) {
           if (yield* tryKeyringWrite(keyringModule.value, ACCOUNT, plainToken)) return;
         }
@@ -95,7 +115,13 @@ const makeCredentials = Effect.gen(function* () {
     deleteAccessToken: Effect.gen(function* () {
       let anyDeleted = false;
 
-      if (Option.isSome(keyringModule)) {
+      if (vaultKeyring) {
+        for (const account of [ACCOUNT, LEGACY_ACCOUNT]) {
+          if (vaultKeyring.get(account)) {
+            anyDeleted = vaultKeyring.delete(account) || anyDeleted;
+          }
+        }
+      } else if (Option.isSome(keyringModule)) {
         for (const account of [ACCOUNT, LEGACY_ACCOUNT]) {
           const deleted = yield* tryKeyringDelete(keyringModule.value, account);
           anyDeleted ||= deleted;
