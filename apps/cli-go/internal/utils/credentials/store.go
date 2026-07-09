@@ -6,7 +6,6 @@ import (
 	"os/exec"
 
 	"github.com/go-errors/errors"
-	"github.com/zalando/go-keyring"
 )
 
 const namespace = "Supabase CLI"
@@ -29,7 +28,7 @@ func (ks *KeyringStore) Get(project string) (string, error) {
 	if err := assertKeyringSupported(); err != nil {
 		return "", err
 	}
-	val, err := keyring.Get(namespace, project)
+	val, err := keyringGet(namespace, project)
 	if errors.Is(err, exec.ErrNotFound) {
 		return "", errors.New(ErrNotSupported)
 	} else if err != nil {
@@ -42,7 +41,7 @@ func (ks *KeyringStore) Set(project, password string) error {
 	if err := assertKeyringSupported(); err != nil {
 		return err
 	}
-	if err := keyring.Set(namespace, project, password); err != nil {
+	if err := keyringSet(namespace, project, password); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return ErrNotSupported
 		}
@@ -55,7 +54,7 @@ func (ks *KeyringStore) Delete(project string) error {
 	if err := assertKeyringSupported(); err != nil {
 		return err
 	}
-	if err := keyring.Delete(namespace, project); err != nil {
+	if err := keyringDelete(namespace, project); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return ErrNotSupported
 		}
@@ -68,7 +67,7 @@ func (ks *KeyringStore) DeleteAll() error {
 	if err := assertKeyringSupported(); err != nil {
 		return err
 	}
-	if err := keyring.DeleteAll(namespace); err != nil {
+	if err := keyringDeleteAll(namespace); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return ErrNotSupported
 		}
