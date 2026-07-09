@@ -10,7 +10,7 @@ import (
 
 func TestKeyringStore(t *testing.T) {
 	t.Run("stores and retrieves password", func(t *testing.T) {
-		keyring.MockInit()
+		mockKeyringInit()
 		project := "test-project"
 		password := "test-password"
 
@@ -23,7 +23,7 @@ func TestKeyringStore(t *testing.T) {
 	})
 
 	t.Run("returns error for non-existent project", func(t *testing.T) {
-		keyring.MockInit()
+		mockKeyringInit()
 		project := "non-existent"
 
 		retrieved, err := StoreProvider.Get(project)
@@ -32,7 +32,7 @@ func TestKeyringStore(t *testing.T) {
 	})
 
 	t.Run("deletes specific project password", func(t *testing.T) {
-		keyring.MockInit()
+		mockKeyringInit()
 		project := "test-project"
 		password := "test-password"
 
@@ -46,7 +46,7 @@ func TestKeyringStore(t *testing.T) {
 	})
 
 	t.Run("deletes all project passwords", func(t *testing.T) {
-		keyring.MockInit()
+		mockKeyringInit()
 		projects := []string{"project1", "project2"}
 
 		for _, project := range projects {
@@ -67,7 +67,7 @@ func TestKeyringStore(t *testing.T) {
 func TestKeyringErrors(t *testing.T) {
 	t.Run("handles Get error", func(t *testing.T) {
 		mockErr := errors.New("mock error")
-		keyring.MockInitWithError(mockErr)
+		mockKeyringInitWithError(mockErr)
 
 		_, err := StoreProvider.Get("test")
 		assert.ErrorIs(t, err, mockErr)
@@ -75,7 +75,7 @@ func TestKeyringErrors(t *testing.T) {
 
 	t.Run("handles Set error", func(t *testing.T) {
 		mockErr := errors.New("mock error")
-		keyring.MockInitWithError(mockErr)
+		mockKeyringInitWithError(mockErr)
 
 		err := StoreProvider.Set("test", "pass")
 		assert.ErrorIs(t, err, mockErr)
@@ -83,7 +83,7 @@ func TestKeyringErrors(t *testing.T) {
 
 	t.Run("handles Delete error", func(t *testing.T) {
 		mockErr := errors.New("mock error")
-		keyring.MockInitWithError(mockErr)
+		mockKeyringInitWithError(mockErr)
 
 		err := StoreProvider.Delete("test")
 		assert.ErrorIs(t, err, mockErr)
@@ -91,7 +91,7 @@ func TestKeyringErrors(t *testing.T) {
 
 	t.Run("handles DeleteAll error", func(t *testing.T) {
 		mockErr := errors.New("mock error")
-		keyring.MockInitWithError(mockErr)
+		mockKeyringInitWithError(mockErr)
 
 		err := StoreProvider.DeleteAll()
 		assert.ErrorIs(t, err, mockErr)
