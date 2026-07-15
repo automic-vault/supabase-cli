@@ -10,6 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestApprovalServiceSigningRequirementPinsTeamAndIdentifier(t *testing.T) {
+	require.Contains(t, approvalServiceSigningRequirement, `certificate leaf[subject.OU] = ZU76A67LGU`)
+	require.Contains(t, approvalServiceSigningRequirement, `identifier "com.automicvault"`)
+	require.NotContains(t, approvalServiceSigningRequirement, "menu-helper")
+}
+
 func TestDecodeSecretPlain(t *testing.T) {
 	secret, err := decodeSecret("sbp_test")
 
