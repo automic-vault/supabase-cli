@@ -16,6 +16,17 @@ func TestApprovalServiceSigningRequirementPinsTeamAndIdentifier(t *testing.T) {
 	require.NotContains(t, approvalServiceSigningRequirement, "menu-helper")
 }
 
+func TestApprovalDecisionNotice(t *testing.T) {
+	require.Equal(t, "automic vault: approved\n", approvalDecisionNotice("approved"))
+	require.Equal(t, "automic vault: denied\n", approvalDecisionNotice("denied"))
+	require.Empty(t, approvalDecisionNotice("other-decision"))
+}
+
+func TestApprovalEventNotice(t *testing.T) {
+	require.Equal(t, humanApprovalRequiredNotice, approvalEventNotice(humanApprovalRequiredEvent))
+	require.Empty(t, approvalEventNotice("other-event"))
+}
+
 func TestDecodeSecretPlain(t *testing.T) {
 	secret, err := decodeSecret("sbp_test")
 
