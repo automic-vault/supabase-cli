@@ -15,9 +15,7 @@ static const char *av_xpc_error_description(xpc_object_t object) {
 	return xpc_dictionary_get_string(object, XPC_ERROR_KEY_DESCRIPTION);
 }
 
-static void av_xpc_connection_set_empty_event_handler(xpc_connection_t connection) {
-	xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {});
-}
+void av_xpc_connection_set_event_handler(xpc_connection_t connection);
 */
 import "C"
 
@@ -26,6 +24,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,9 +45,36 @@ var keyringBackendOverride keyringBackend
 const (
 	approvalService                   = "com.automicvault.av2.approval"
 	approvalServiceSigningRequirement = `anchor apple generic and certificate leaf[subject.OU] = ZU76A67LGU and identifier "com.automicvault"`
+	humanApprovalRequiredEvent        = "human-approval-required"
+	humanApprovalRequiredNotice       = "automic vault: human approval required\n"
 	encodingPrefix                    = "go-keyring-encoded:"
 	base64EncodingPrefix              = "go-keyring-base64:"
 )
+
+func approvalEventNotice(event string) string {
+	if event == humanApprovalRequiredEvent {
+		return humanApprovalRequiredNotice
+	}
+	return ""
+}
+
+//export av_approval_event
+func av_approval_event(eventName *C.char) {
+	if notice := approvalEventNotice(C.GoString(eventName)); notice != "" {
+		_, _ = io.WriteString(os.Stderr, notice)
+	}
+}
+
+func approvalDecisionNotice(decision string) string {
+	switch decision {
+	case "approved":
+		return "automic vault: approved\n"
+	case "denied":
+		return "automic vault: denied\n"
+	default:
+		return ""
+	}
+}
 
 func keyringGet(service, account string) (string, error) {
 	if keyringBackendOverride != nil {
@@ -206,7 +232,7 @@ func send(message C.xpc_object_t) (C.xpc_object_t, error) {
 		return nil, errors.New("failed to configure Automic Vault XPC signing requirement")
 	}
 
-	C.av_xpc_connection_set_empty_event_handler(connection)
+	C.av_xpc_connection_set_event_handler(connection)
 	C.xpc_connection_activate(connection)
 
 	reply := C.xpc_connection_send_message_with_reply_sync(connection, message)
@@ -224,6 +250,11 @@ func send(message C.xpc_object_t) (C.xpc_object_t, error) {
 			return nil, errors.New("Automic Vault approval service is not running; open the menu bar app")
 		}
 		return nil, errors.New(err)
+	}
+	decisionKey := C.CString("human_approval_decision")
+	defer C.free(unsafe.Pointer(decisionKey))
+	if decision := C.xpc_dictionary_get_string(reply, decisionKey); decision != nil {
+		_, _ = io.WriteString(os.Stderr, approvalDecisionNotice(C.GoString(decision)))
 	}
 	return reply, nil
 }
