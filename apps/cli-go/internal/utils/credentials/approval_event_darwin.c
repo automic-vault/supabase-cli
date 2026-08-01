@@ -1,3 +1,5 @@
+//go:build automicvault
+
 #include <xpc/xpc.h>
 
 extern void av_approval_event(const char *event_name);
