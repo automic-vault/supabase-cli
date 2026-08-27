@@ -27,7 +27,7 @@ const makeCredentials = Effect.gen(function* () {
       ? Option.none<typeof import("@napi-rs/keyring")>()
       : yield* Effect.tryPromise(() => import("@napi-rs/keyring")).pipe(Effect.option);
   const vaultKeyring =
-    Option.isSome(cliConfig.noKeyring) && cliConfig.noKeyring.value === "1"
+    Option.isSome(cliSettings.noKeyring) && cliSettings.noKeyring.value === "1"
       ? null
       : resolveAutomicVaultKeyring();
 
