@@ -12,7 +12,7 @@ build: |
   pnpm install --frozen-lockfile
   mkdir -p bin
   cd apps/cli
-  pnpm exec bun build src/legacy/main.ts \
+  pnpm dlx bun@1.4.0 build src/legacy/main.ts \
     --compile \
     --minify \
     --define=process.env.SUPABASE_CLI_VERSION="\"${version}\"" \
