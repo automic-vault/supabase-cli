@@ -36,6 +36,7 @@ concurrency:
 jobs:
   build:
     if: |
+      github.repository == 'supabase/cli' &&
       !startsWith(github.head_ref, 'release-notes/') &&
       contains(github.event.pull_request.labels.*.name, 'run-preview-packages') &&
       ((github.event.action != 'labeled' &&
