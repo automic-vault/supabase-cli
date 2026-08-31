@@ -14,8 +14,8 @@ on:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    # Swift requires a macOS runner; every other language in the matrix uses blacksmith.
-    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'blacksmith-8vcpu-ubuntu-2404' }}
+    # The isotope fork does not have access to Supabase's Blacksmith runners.
+    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
     timeout-minutes: ${{ (matrix.language == 'swift' && 120) || 360 }}
     permissions:
       # required for all workflows
