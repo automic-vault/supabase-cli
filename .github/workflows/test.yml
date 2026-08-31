@@ -45,6 +45,7 @@ concurrency:
 jobs:
   check:
     if: |
+      github.repository == 'supabase/cli' &&
       !startsWith(github.head_ref, 'release-notes/') &&
       (github.event_name == 'merge_group' ||
         inputs.force ||
@@ -69,6 +70,7 @@ jobs:
 
   test-unit:
     if: |
+      github.repository == 'supabase/cli' &&
       !startsWith(github.head_ref, 'release-notes/') &&
       (github.event_name == 'merge_group' ||
         inputs.force ||
@@ -91,6 +93,7 @@ jobs:
 
   test-integration:
     if: |
+      github.repository == 'supabase/cli' &&
       !startsWith(github.head_ref, 'release-notes/') &&
       (github.event_name == 'merge_group' ||
         inputs.force ||
@@ -113,6 +116,7 @@ jobs:
 
   test-summary:
     if: |
+      github.repository == 'supabase/cli' &&
       always() &&
       !startsWith(github.head_ref, 'release-notes/') &&
       (github.event_name == 'merge_group' ||
@@ -133,6 +137,7 @@ jobs:
 
   test-e2e:
     if: |
+      github.repository == 'supabase/cli' &&
       !startsWith(github.head_ref, 'release-notes/') &&
       (github.event_name == 'merge_group' ||
         inputs.force ||
@@ -187,6 +192,7 @@ jobs:
   # succeeded (or skipped — `success()` is true for skipped jobs).
   test-e2e-summary:
     if: |
+      github.repository == 'supabase/cli' &&
       always() &&
       !startsWith(github.head_ref, 'release-notes/') &&
       (github.event_name == 'merge_group' ||
