@@ -17,7 +17,7 @@ permissions:
 jobs:
   test:
     name: Test
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -67,7 +67,7 @@ jobs:
     name: Coverage
     needs:
       - test
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - name: Restore coverage cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -107,6 +107,7 @@ jobs:
           working-directory: apps/cli-go
 
   codegen:
+    if: github.repository == 'supabase/cli'
     name: Codegen
     runs-on: ubuntu-latest
     steps:

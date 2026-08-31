@@ -39,6 +39,7 @@ concurrency:
 jobs:
   build:
     if: |
+      github.repository == 'supabase/cli' &&
       !startsWith(github.head_ref, 'release-notes/') &&
       (inputs.force || github.event.pull_request.draft == false)
     name: Build preview CLI packages
@@ -52,6 +53,7 @@ jobs:
   publish:
     needs: build
     if: |
+      github.repository == 'supabase/cli' &&
       !startsWith(github.head_ref, 'release-notes/') &&
       (inputs.force || github.event.pull_request.draft == false) &&
       needs.build.result == 'success'
@@ -136,6 +138,7 @@ jobs:
   comment:
     needs: publish
     if: |
+      github.repository == 'supabase/cli' &&
       !startsWith(github.head_ref, 'release-notes/') &&
       (inputs.force || github.event.pull_request.draft == false) &&
       needs.publish.result == 'success'
