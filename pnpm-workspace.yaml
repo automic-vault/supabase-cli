@@ -44,6 +44,9 @@ packageExtensions:
   # The global virtual store has no hidden hoist directory
   # (node_modules/.pnpm/node_modules), so anything a package imports without
   # declaring has to be declared here for it to resolve at all.
+  plpgsql-deparser:
+    dependencies:
+      "@libpg-query/parser": "17.6.10"
   bun-types:
     dependencies:
       # bun-types imports undici-types but declares only @types/node; keep
