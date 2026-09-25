@@ -14,7 +14,8 @@ const packageJson = JSON.parse(
 ) as {
   version?: string;
 };
-if (packageJson.version === undefined || packageJson.version.length === 0) {
+const version = process.env.SUPABASE_CLI_VERSION ?? packageJson.version;
+if (version === undefined || version.length === 0) {
   throw new Error("CLI package version is required for a compiled build");
 }
 const result = await Bun.build({
@@ -22,7 +23,7 @@ const result = await Bun.build({
   compile: { outfile },
   ...compileOptions,
   define: {
-    SUPABASE_CLI_VERSION: JSON.stringify(packageJson.version),
+    SUPABASE_CLI_VERSION: JSON.stringify(version),
     ...(await stackReleaseDefine()),
     SUPABASE_FUNCTIONS_SERVE_MAIN_TEMPLATE: JSON.stringify(
       await Effect.runPromise(bundleServeMainTemplate()),
