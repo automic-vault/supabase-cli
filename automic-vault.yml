@@ -9,14 +9,11 @@ build: |
   if [ -z "$version" ]; then
     version="$(git describe --tags --abbrev=0 | sed 's/^v//')"
   fi
-  pnpm dlx pnpm@12.3.0 install --frozen-lockfile
+  pnpm dlx pnpm@12.4.0 install --frozen-lockfile
   mkdir -p bin
   cd apps/cli
-  pnpm dlx bun@1.4.0 build src/main.ts \
-    --compile \
-    --minify \
-    --define=process.env.SUPABASE_CLI_VERSION="\"${version}\"" \
-    --outfile ../../bin/supabase
+  SUPABASE_CLI_VERSION="$version" pnpm dlx bun@1.4.1 scripts/build-binary.ts
+  cp dist/supabase ../../bin/supabase
   cd ../cli-go
   CGO_ENABLED=1 go build \
     -tags automicvault \
