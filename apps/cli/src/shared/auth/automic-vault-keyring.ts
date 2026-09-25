@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 
-import { resolveBinary } from "../legacy/go-proxy.layer.ts";
+import { resolveBinary } from "../../command-internal/go-proxy.layer.ts";
 
 export interface AutomicVaultKeyring {
   get(account: string): string | null;
