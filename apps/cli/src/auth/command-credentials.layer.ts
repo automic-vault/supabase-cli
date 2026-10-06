@@ -447,9 +447,7 @@ export const accessTokenForProfile = Effect.fn("CommandCredentials.accessTokenFo
       configProvider,
     );
     const vaultKeyring =
-      Option.isSome(noKeyring) && noKeyring.value === "1"
-        ? null
-        : resolveAutomicVaultKeyring();
+      Option.isSome(noKeyring) && noKeyring.value === "1" ? null : resolveAutomicVaultKeyring();
     const keyringModule = vaultKeyring
       ? Option.none<KeyringModule>()
       : yield* loadKeyringModule(fs, noKeyring);
