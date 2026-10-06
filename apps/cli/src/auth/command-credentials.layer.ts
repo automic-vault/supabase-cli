@@ -431,15 +431,13 @@ export const accessTokenForProfile = Effect.fn("CommandCredentials.accessTokenFo
       configProvider,
     );
     const vaultKeyring =
-      Option.isSome(noKeyring) && noKeyring.value === "1"
-        ? null
-        : resolveAutomicVaultKeyring();
+      Option.isSome(noKeyring) && noKeyring.value === "1" ? null : resolveAutomicVaultKeyring();
     const keyringModule = vaultKeyring
       ? Option.none<KeyringModule>()
       : yield* loadKeyringModule(fs, noKeyring);
-    const keyringValue = yield* (vaultKeyring
+    const keyringValue = yield* vaultKeyring
       ? readAutomicVaultKeyringForAccount(vaultKeyring, profileAccount, debugLogger)
-      : readKeyringForAccount(keyringModule, profileAccount, runtimeInfo.platform, debugLogger));
+      : readKeyringForAccount(keyringModule, profileAccount, runtimeInfo.platform, debugLogger);
     if (Option.isSome(keyringValue)) {
       yield* validateAccessToken(keyringValue.value);
       return Option.some(Redacted.make(keyringValue.value));
