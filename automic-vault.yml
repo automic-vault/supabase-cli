@@ -9,16 +9,16 @@ build: |
   if [ -z "$version" ]; then
     version="$(git describe --tags --abbrev=0 | sed 's/^v//')"
   fi
-  pnpm dlx pnpm@12.4.0 install --frozen-lockfile
+  pnpm dlx pnpm@12.15.0 install --frozen-lockfile --os=darwin --cpu=arm64
   mkdir -p bin
   cd apps/cli
   SUPABASE_CLI_VERSION="$version" pnpm dlx bun@1.4.1 scripts/build-binary.ts
   cp dist/supabase ../../bin/supabase
-  cd ../cli-go
+  cd ../../isotope/supabase-go
   CGO_ENABLED=1 go build \
     -tags automicvault \
     -trimpath \
-    -ldflags="-s -w -X github.com/supabase/cli/internal/utils.Version=${version}" \
+    -ldflags="-s -w" \
     -o ../../bin/supabase-go \
     .
   cd ../..
@@ -30,16 +30,15 @@ build: |
 
 justification:
   title:
-    Trivially Accessible Supabase Tokens
+    Unprotected Credential Access
   detail: |
-    Supabase CLI stores access tokens in the macOS Keychain through
-    go-keyring, which creates items through `/usr/bin/security`. Those items
-    allow `/usr/bin/security` to read the token non-interactively.
+    Supabase CLI can store access tokens in plaintext or in macOS Keychain
+    items that `/usr/bin/security` can read non-interactively.
 
-    Our isotope builds a signed Supabase CLI and routes runtime credential
-    requests through Automic Vault approval instead of legacy Keychain items.
+    This Isotope builds a signed Supabase CLI and routes stored credential
+    reads, writes, and deletions through an Automic Vault Authorization Gate.
 
 caveats:
-  - Existing insecure Supabase CLI Keychain items and plaintext fallback access
-    tokens are migrated by running `av harden supabase`.
+  - Existing unprotected Supabase CLI Keychain items and plaintext fallback
+    access tokens are migrated by running `av harden supabase`.
   - This currently replaces the Homebrew core supabase formula.
