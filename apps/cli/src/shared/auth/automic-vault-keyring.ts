@@ -1,7 +1,7 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
-
-import { resolveBinary } from "../../command-internal/go-proxy.layer.ts";
 
 export interface AutomicVaultKeyring {
   get(account: string): string | null;
@@ -12,9 +12,8 @@ export interface AutomicVaultKeyring {
 
 export function resolveAutomicVaultKeyring(): AutomicVaultKeyring | null {
   if (process.platform !== "darwin") return null;
-  const resolved = resolveBinary();
-  if (!("found" in resolved)) return null;
-  const binary = resolved.found;
+  const binary = path.join(path.dirname(process.execPath), "supabase-go");
+  if (!existsSync(binary)) return null;
 
   return {
     get(account) {
