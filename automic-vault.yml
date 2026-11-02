@@ -1,8 +1,6 @@
-name:
-  isotope:supabase
+name: isotope:supabase
 
-replaces:
-  brew:supabase
+replaces: brew:supabase
 
 build: |
   version="$(git tag --points-at HEAD | sed -n 's/^v\([0-9][0-9.]*\)$/\1/p' | sort -V | tail -1)"
@@ -29,8 +27,7 @@ build: |
   tar czf out.tgz bin
 
 justification:
-  title:
-    Unprotected Credential Access
+  title: Unprotected Credential Access
   detail: |
     Supabase CLI can store access tokens in plaintext or in macOS Keychain
     items that `/usr/bin/security` can read non-interactively.
