@@ -452,9 +452,9 @@ export const accessTokenForProfile = Effect.fn("CommandCredentials.accessTokenFo
       ? Option.none<KeyringModule>()
       : yield* loadKeyringModule(fs, noKeyring);
     const keyringValue = yield* logKeyringSource(
-      yield* (vaultKeyring
+      yield* vaultKeyring
         ? lookupAutomicVaultKeyringForAccount(vaultKeyring, profileAccount)
-        : lookupKeyringForAccount(keyringModule, profileAccount, runtimeInfo.platform)),
+        : lookupKeyringForAccount(keyringModule, profileAccount, runtimeInfo.platform),
       profileAccount,
       debugLogger,
     );
